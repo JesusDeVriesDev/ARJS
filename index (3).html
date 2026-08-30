@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>Colección Raíz — Portavasos en realidad aumentada</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Work+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+
+<script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js@3.4.5/aframe/build/aframe-ar-nft.js"></script>
+
+<style>
+  :root{
+    --ink:#241a10;
+    --ink-soft:#6d5c48;
+    --parchment:#efe6d6;
+    --ground:#161009;
+    --brass:#8a6a3b;
+    --line: rgba(36,26,16,0.14);
+
+    --c0:#c9a66b; /* corcho */
+    --c1:#c98a2e; /* bambú */
+    --c2:#48525c; /* pizarra */
+    --c3:#b5652e; /* fieltro */
+    --c4:#2451a4; /* cerámica */
+    --c5:#8b4a2b; /* cuero */
+  }
+
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body{ margin:0; padding:0; height:100%; overflow:hidden; background:var(--ground); font-family:'Work Sans', sans-serif; color:var(--ink); }
+  h1,h2,h3,.display{ font-family:'Fraunces', serif; font-weight:600; letter-spacing:-0.01em; }
+
+  /* ---------- Pantalla de inicio ---------- */
+  #intro{
+    position:fixed; inset:0; z-index:50;
+    display:flex; flex-direction:column; justify-content:flex-end;
+    padding: 8vh 28px 48px;
+    background:
+      radial-gradient(120% 90% at 80% 0%, rgba(138,106,59,0.35), transparent 55%),
+      linear-gradient(180deg, #1c1408 0%, #100b06 70%, #0a0705 100%);
+    color: var(--parchment);
+  }
+  #intro .tag{
+    font-size:13px; color:#c8ad84; margin-bottom:14px;
+  }
+  #intro h1{ font-size: clamp(38px, 9vw, 56px); line-height:1.02; margin:0 0 18px; max-width: 11ch; }
+  #intro p{ font-size:15.5px; line-height:1.55; color:#d8cbb4; max-width:34ch; margin:0 0 34px; }
+  #start-btn{
+    align-self:flex-start;
+    border:none; cursor:pointer;
+    background: var(--parchment); color:#241a10;
+    font-family:'Work Sans', sans-serif; font-weight:600; font-size:15px;
+    padding:16px 26px; border-radius:3px;
+    display:flex; align-items:center; gap:10px;
+  }
+  #start-btn svg{ width:18px; height:18px; }
+  #intro .hint{ margin-top:14px; font-size:12.5px; color:#8f7f68; }
+  #intro .ring-deco{
+    position:absolute; top:9vh; right:-40px; width:260px; height:260px;
+    border-radius:50%; border:1px solid rgba(200,173,132,0.25);
+  }
+  #intro .ring-deco::after{
+    content:''; position:absolute; inset:30px; border-radius:50%;
+    border:1px solid rgba(200,173,132,0.18);
+  }
+  #cam-error{
+    display:none; margin-top:16px; font-size:13px; color:#e6b8a2;
+    max-width:34ch; line-height:1.5;
+  }
+
+  /* ---------- Vista AR ---------- */
+  #ar-wrap{ position:fixed; inset:0; display:none; background:#000; }
+  a-scene{ position:absolute; inset:0; }
+
+  /* Fuerza a que la cámara (video) siempre se vea a pantalla completa. AR.js suele
+     insertar el <video> como hijo directo de <body>, fuera de #ar-wrap, así que
+     el selector no se limita a ese contenedor. */
+  video{
+    position:fixed !important; top:0 !important; left:0 !important;
+    width:100% !important; height:100% !important;
+    object-fit:cover !important; z-index:1 !important; display:block !important;
+    visibility:visible !important; opacity:1 !important;
+  }
+  /* Solo el canvas PRINCIPAL de A-Frame (donde se dibuja la escena 3D) debe
+     cubrir la pantalla y ser transparente. AR.js crea además canvases internos
+     de procesamiento de imagen (para detectar el marcador) que NO deben mostrarse
+     ni estirarse — si se tocan, tapan la cámara con una imagen en negro. */
+  #ar-wrap canvas.a-canvas{
+    position:fixed !important; top:0 !important; left:0 !important;
+    width:100% !important; height:100% !important;
+    z-index:2 !important; background:transparent !important;
+  }
+
+  #hud{
+    position:absolute; top:0; left:0; right:0; z-index:20;
+    padding: max(18px, env(safe-area-inset-top)) 20px 16px;
+    background: linear-gradient(180deg, rgba(10,7,5,0.72), rgba(10,7,5,0));
+    pointer-events:none;
+  }
+  #hud .instruction{
+    color:#f3ead9; font-size:14px; font-weight:500;
+    display:flex; align-items:center; gap:9px;
+  }
+  #hud .pulse{
+    width:8px; height:8px; border-radius:50%; background:#c8ad84;
+    animation: pulse 1.6s ease-in-out infinite;
+  }
+  @keyframes pulse{ 0%,100%{ opacity:.4; transform:scale(0.8);} 50%{ opacity:1; transform:scale(1);} }
+
+  #dots{ display:flex; gap:7px; margin-top:12px; }
+  #dots .d{
+    width:9px; height:9px; border-radius:50%;
+    border:1.4px solid rgba(243,234,217,0.55);
+    transition: background .35s ease, border-color .35s ease, transform .35s ease;
+  }
+  #dots .d.seen{ transform:scale(1.15); }
+
+  #close-ar{
+    position:absolute; z-index:25; top: max(16px, env(safe-area-inset-top));
+    right:18px; width:36px; height:36px; border-radius:50%;
+    background:rgba(10,7,5,0.55); border:1px solid rgba(243,234,217,0.3);
+    color:#f3ead9; font-size:18px; line-height:1; display:flex; align-items:center; justify-content:center;
+    cursor:pointer;
+  }
+
+  /* ---------- Estado de carga de cámara ---------- */
+  #cam-loading{
+    position:absolute; left:50%; top: max(70px, calc(env(safe-area-inset-top) + 60px));
+    transform: translateX(-50%);
+    z-index:15; max-width: min(86vw, 360px);
+    display:flex; align-items:center; gap:10px;
+    padding:11px 16px; border-radius:999px;
+    background: rgba(10,7,5,0.72); backdrop-filter: blur(6px);
+    color:#e8dcc7; pointer-events:none;
+    transition: opacity .4s ease;
+  }
+  #cam-loading .spinner{
+    width:15px; height:15px; flex:none; border-radius:50%;
+    border:2px solid rgba(232,220,199,0.25); border-top-color:#c8ad84;
+    animation: spin 0.9s linear infinite;
+  }
+  @keyframes spin{ to{ transform: rotate(360deg); } }
+  #cam-loading p{ font-size:12.5px; color:#e8dcc7; line-height:1.4; margin:0; }
+  #cam-loading.hidden{ opacity:0; }
+  #cam-loading .retry{
+    display:none; pointer-events:auto; margin-left:4px; flex:none;
+    border:1px solid rgba(232,220,199,0.4); background:transparent;
+    color:#e8dcc7; font-family:'Work Sans',sans-serif; font-size:12px; padding:6px 12px; border-radius:999px; cursor:pointer;
+  }
+  #cam-loading.error{ pointer-events:auto; background:rgba(60,20,14,0.85); }
+  #cam-loading.error .spinner{ display:none; }
+  #cam-loading.error .retry{ display:inline-block; }
+
+  /* ---------- Ficha del portavasos ---------- */
+  .card{
+    position:absolute; left:0; right:0; bottom:0; z-index:30;
+    max-height:74vh; overflow-y:auto;
+    background:var(--parchment); color:var(--ink);
+    border-radius:18px 18px 0 0;
+    padding: 22px 22px max(26px, env(safe-area-inset-bottom));
+    transform: translateY(100%);
+    transition: transform .38s cubic-bezier(.2,.8,.2,1);
+    box-shadow: 0 -10px 40px rgba(0,0,0,0.35);
+  }
+  .card.visible{ transform: translateY(0); }
+
+  .card .grip{ width:34px; height:4px; border-radius:2px; background:var(--line); margin:0 auto 16px; }
+
+  .card .head{ display:flex; align-items:flex-start; gap:13px; margin-bottom:4px; }
+  .card .swatch{ width:40px; height:40px; border-radius:9px; flex:none; margin-top:3px; }
+  .card h2{ font-size:25px; margin:0 0 3px; line-height:1.08; }
+  .card .material{ font-size:13px; color:var(--ink-soft); }
+
+  .card .rule{ height:1px; background:var(--line); margin:18px 0; }
+
+  .card .block{ margin-bottom:18px; }
+  .card .block:last-of-type{ margin-bottom:0; }
+  .card .label{ font-size:12.5px; color:var(--ink-soft); margin-bottom:6px; }
+  .card .body-text{ font-size:14.5px; line-height:1.6; }
+
+  .stats{ display:flex; gap:10px; margin:18px 0; }
+  .stat{ flex:1; background:rgba(36,26,16,0.045); border-radius:10px; padding:12px 14px; }
+  .stat .num{ font-family:'Fraunces', serif; font-size:20px; font-weight:600; }
+  .stat .lbl{ font-size:12px; color:var(--ink-soft); margin-top:2px; }
+
+  .fate{
+    border-radius:12px; padding:16px 16px 15px; margin-top:4px;
+    background: color-mix(in srgb, var(--accent) 12%, var(--parchment));
+    border:1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  }
+  .fate .label{ color: color-mix(in srgb, var(--accent) 65%, #241a10); }
+  .fate .body-text{ color:#241a10; }
+</style>
+</head>
+<body>
+
+<!-- ============ PANTALLA DE INICIO ============ -->
+<section id="intro">
+  <div class="ring-deco"></div>
+  <div class="tag">Colección Raíz · 6 piezas</div>
+  <h1>Cada portavasos<br>tiene una historia.</h1>
+  <p>Apunta la cámara al fondo de cualquier pieza de la colección y descubre de qué está hecha, cómo se diseñó y qué pasa con ella cuando termina su vida útil.</p>
+  <button id="start-btn">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2Z"/><circle cx="12" cy="13" r="4"/></svg>
+    Activar cámara y escanear
+  </button>
+  <div class="hint">La cámara solo se usa para reconocer los marcadores impresos en la base de cada portavasos.</div>
+  <div id="cam-error"></div>
+</section>
+
+<!-- ============ VISTA AR ============ -->
+<div id="ar-wrap">
+  <button id="close-ar" aria-label="Cerrar">×</button>
+
+  <div id="hud">
+    <div class="instruction"><span class="pulse"></span><span id="instruction-text">Buscando un portavasos…</span></div>
+    <div id="dots"></div>
+  </div>
+
+  <div id="cam-loading">
+    <div class="spinner"></div>
+    <p id="cam-loading-text">Activando cámara…</p>
+    <button class="retry" id="retry-cam">Reintentar</button>
+  </div>
+
+  <a-scene id="ar-scene"
+    embedded
+    vr-mode-ui="enabled: false"
+    renderer="antialias: true; alpha: true"
+    arjs="trackingMethod: best; sourceType: webcam; debugUIEnabled: false;">
+
+    <a-entity id="markers"></a-entity>
+
+    <a-entity camera></a-entity>
+  </a-scene>
+
+  <div id="cards"></div>
+</div>
+
+<script>
+  // ---------------------------------------------------------------
+  // Datos de las 6 piezas de la colección. Cada objeto corresponde a un
+  // marcador NFT (reconocimiento de imagen real) generado a partir de
+  // porta1.png ... porta6.png con https://ar-js-org.github.io/NFT-Marker-Creator/
+  //
+  // Coloca, junto a este index.html, una carpeta "markers" con esta forma:
+  //   markers/porta1/porta1.fset
+  //   markers/porta1/porta1.fset3
+  //   markers/porta1/porta1.iset
+  //   markers/porta2/porta2.fset  ...  (y así hasta porta6)
+  // ---------------------------------------------------------------
+  const PORTAVASOS = [
+    {
+      id: 0, archivo: "porta1", nombre: "Anillo de Corcho", material: "Corcho natural", accent: "var(--c0)",
+      color: "Beige corcho, con vetas más oscuras irregulares propias del material.",
+      diseno: "Anillos concéntricos grabados a fuego.",
+      descripcionDiseno: "El grabado imita los anillos de crecimiento de un tronco, marcados a fuego a baja temperatura para no comprometer la porosidad natural del corcho.",
+      descripcion: "Disco prensado a partir de granulado de corteza de alcornoque, sin adhesivos sintéticos. Absorbe la humedad de la base del vaso sin mancharse.",
+      peso: "45 g",
+      duracion: "3–5 años de uso diario",
+      final: "Se descompone por completo en compost doméstico en unos 6 meses, sin dejar residuo. También puede triturarse y usarse como sustrato para plantas."
+    },
+    {
+      id: 1, archivo: "porta2", nombre: "Onda de Bambú", material: "Bambú prensado", accent: "var(--c1)",
+      color: "Miel clara, con reflejos dorados según la luz.",
+      diseno: "Líneas onduladas talladas a mano.",
+      descripcionDiseno: "Cada onda se talla individualmente con gubia siguiendo la fibra del bambú, representando el movimiento del agua sobre la superficie.",
+      descripcion: "Láminas de bambú de crecimiento rápido prensadas en frío y selladas con aceite vegetal. Superficie firme, resistente a golpes leves.",
+      peso: "60 g",
+      duracion: "5–7 años de uso diario",
+      final: "Es biodegradable en un suelo húmedo en aproximadamente 2 años. Si prefieres no compostarlo, puede reutilizarse como leña de encendido."
+    },
+    {
+      id: 2, archivo: "porta3", nombre: "Constelación de Pizarra", material: "Pizarra natural", accent: "var(--c2)",
+      color: "Gris grafito, con micro-brillos minerales.",
+      diseno: "Grabado geométrico de constelaciones.",
+      descripcionDiseno: "Un mapa estelar simplificado se graba con láser sobre la piedra pulida, distinto en cada lote según la fecha de fabricación.",
+      descripcion: "Losa de pizarra cortada y pulida a mano, con base de fieltro antideslizante. No absorbe líquidos ni retiene olores.",
+      peso: "180 g",
+      duracion: "Indefinida con uso normal",
+      final: "Al ser un mineral inerte, no se degrada. Cuando ya no lo quieras, puede reutilizarse como pizarra decorativa para escribir con tiza o llevarse a un punto limpio de residuos de construcción."
+    },
+    {
+      id: 3, archivo: "porta4", nombre: "Espiral de Fieltro", material: "Fieltro de lana", accent: "var(--c3)",
+      color: "Ocre tostado, tono cálido y mate.",
+      diseno: "Capas superpuestas cortadas en espiral.",
+      descripcionDiseno: "Varias capas de fieltro se cortan con láser en espiral y se apilan para dar volumen y textura suave al tacto.",
+      descripcion: "Lana prensada sin tratamientos químicos, cortada por capas y prensada a mano. Muy ligero y silencioso al apoyar el vaso.",
+      peso: "25 g",
+      duracion: "2–3 años de uso diario",
+      final: "Es fibra 100% natural: se biodegrada en compost en 4 a 8 semanas. Si está en buen estado, también puede donarse o reutilizarse como fieltro de limpieza."
+    },
+    {
+      id: 4, archivo: "porta5", nombre: "Reflejo de Cerámica", material: "Cerámica esmaltada", accent: "var(--c4)",
+      color: "Azul cobalto con reflejos cambiantes.",
+      diseno: "Esmaltado reactivo tipo raku.",
+      descripcionDiseno: "El esmalte reacciona de forma distinta con cada cocción, así que no hay dos piezas idénticas: la temperatura del horno decide el patrón final.",
+      descripcion: "Arcilla cocida a alta temperatura y esmaltada a mano. Base porosa sin esmaltar para un buen agarre y absorción.",
+      peso: "210 g",
+      duracion: "Indefinida, resistente a golpes leves",
+      final: "No es biodegradable, pero sí inerte y no contaminante. Al romperse, los fragmentos pueden usarse como drenaje en macetas o entregarse en un punto limpio de cerámica."
+    },
+    {
+      id: 5, archivo: "porta6", nombre: "Hoja de Cuero", material: "Cuero de curtido vegetal", accent: "var(--c5)",
+      color: "Cognac envejecido, que se oscurece con el uso.",
+      diseno: "Repujado a mano con motivo de hojas.",
+      descripcionDiseno: "El motivo se marca a mano con troqueles de bronce sobre cuero húmedo, presionando la fibra en lugar de cortarla.",
+      descripcion: "Cuero curtido con taninos vegetales, sin cromo ni metales pesados. Se acomoda a las manchas y adquiere pátina con el tiempo.",
+      peso: "40 g",
+      duracion: "4–6 años de uso diario",
+      final: "Al ser curtido vegetal, es compostable en instalaciones industriales en unos 12 meses. También puede repararse o reutilizarse como pieza de marroquinería pequeña."
+    }
+  ];
+
+  const markersRoot = document.getElementById("markers");
+  const cardsRoot = document.getElementById("cards");
+  const dotsRoot = document.getElementById("dots");
+  const instructionText = document.getElementById("instruction-text");
+
+  // Construye marcadores AR (NFT, a partir de las fotos entrenadas) y tarjetas de información
+  PORTAVASOS.forEach(p => {
+    const marker = document.createElement("a-nft");
+    marker.setAttribute("type", "nft");
+    marker.setAttribute("url", "markers/" + p.archivo + "/" + p.archivo);
+    marker.setAttribute("smooth", "true");
+    marker.setAttribute("smoothCount", "10");
+    marker.setAttribute("smoothTolerance", "0.01");
+    marker.setAttribute("smoothThreshold", "5");
+    marker.setAttribute("id", "marker-" + p.id);
+    marker.innerHTML = `
+      <a-torus color="${p.accent}" radius="0.5" radius-tubular="0.02" position="0 0 0" rotation="0 0 0"
+        animation="property: scale; dir: alternate; dur: 900; loop: true; to: 1.06 1.06 1.06"></a-torus>
+      <a-circle color="${p.accent}" opacity="0.18" radius="0.46" position="0 0 -0.005"></a-circle>
+    `;
+    markersRoot.appendChild(marker);
+
+    marker.addEventListener("markerFound", () => showCard(p.id));
+    marker.addEventListener("markerLost", () => hideCard(p.id));
+
+    // Tarjeta de información (overlay HTML)
+    const card = document.createElement("div");
+    card.className = "card";
+    card.id = "card-" + p.id;
+    card.style.setProperty("--accent", p.accent);
+    card.innerHTML = `
+      <div class="grip"></div>
+      <div class="head">
+        <div class="swatch" style="background:${p.accent}"></div>
+        <div>
+          <h2>${p.nombre}</h2>
+          <div class="material">${p.material}</div>
+        </div>
+      </div>
+      <div class="rule"></div>
+      <div class="block">
+        <div class="label">Descripción</div>
+        <div class="body-text">${p.descripcion}</div>
+      </div>
+      <div class="block">
+        <div class="label">Color</div>
+        <div class="body-text">${p.color}</div>
+      </div>
+      <div class="block">
+        <div class="label">Diseño — ${p.diseno}</div>
+        <div class="body-text">${p.descripcionDiseno}</div>
+      </div>
+      <div class="stats">
+        <div class="stat"><div class="num">${p.peso}</div><div class="lbl">Peso</div></div>
+        <div class="stat"><div class="num">${p.duracion}</div><div class="lbl">Duración estimada</div></div>
+      </div>
+      <div class="fate">
+        <div class="label">Al final de su vida útil</div>
+        <div class="body-text">${p.final}</div>
+      </div>
+    `;
+    cardsRoot.appendChild(card);
+
+    // Punto de progreso
+    const dot = document.createElement("div");
+    dot.className = "d";
+    dot.id = "dot-" + p.id;
+    dotsRoot.appendChild(dot);
+  });
+
+  const found = new Set();
+
+  function showCard(id){
+    document.querySelectorAll(".card.visible").forEach(c => c.classList.remove("visible"));
+    document.getElementById("card-" + id).classList.add("visible");
+    document.getElementById("hud").style.opacity = "0.55";
+    if(!found.has(id)){
+      found.add(id);
+      document.getElementById("dot-" + id).classList.add("seen");
+      document.getElementById("dot-" + id).style.background = PORTAVASOS[id].accent;
+      document.getElementById("dot-" + id).style.borderColor = PORTAVASOS[id].accent;
+    }
+    instructionText.textContent = PORTAVASOS[id].nombre;
+    updateProgressText();
+  }
+
+  function hideCard(id){
+    document.getElementById("card-" + id).classList.remove("visible");
+    document.getElementById("hud").style.opacity = "1";
+    updateProgressText();
+  }
+
+  function updateProgressText(){
+    if(found.size === 0){
+      instructionText.textContent = "Buscando un portavasos…";
+    } else if(found.size === PORTAVASOS.length){
+      instructionText.textContent = "Colección completa — " + found.size + "/6 piezas descubiertas";
+    } else {
+      instructionText.textContent = found.size + "/6 piezas descubiertas";
+    }
+  }
+
+  // ---------------------------------------------------------------
+  // Arranque: mostrar la escena AR (AR.js pide el acceso a la cámara
+  // una sola vez, al montarse) y mantener visible un estado de carga
+  // hasta que el video de la cámara esté realmente en pantalla.
+  // ---------------------------------------------------------------
+  const loading = document.getElementById("cam-loading");
+  const loadingText = document.getElementById("cam-loading-text");
+  let cameraWatchdog = null;
+
+  function watchForCameraVideo(){
+    let settled = false;
+
+    const trySettle = () => {
+      const video = document.querySelector("video");
+      if(video && video.readyState >= 2 && !settled){
+        settled = true;
+        clearInterval(poller);
+        clearTimeout(cameraWatchdog);
+        loading.classList.add("hidden");
+      }
+    };
+
+    const poller = setInterval(trySettle, 250);
+    trySettle();
+
+    // Si tras varios segundos no hay video real reproduciéndose (permiso denegado,
+    // sin HTTPS, navegador sin soporte, etc.) se muestra un aviso con reintentar.
+    cameraWatchdog = setTimeout(() => {
+      if(settled) return;
+      clearInterval(poller);
+      loading.classList.add("error");
+      loadingText.textContent = "No se pudo mostrar la cámara. Revisa el permiso del sitio y que se sirva por HTTPS.";
+    }, 7000);
+  }
+
+  function startAR(){
+    loading.classList.remove("hidden", "error");
+    loadingText.textContent = "Activando cámara…";
+    document.getElementById("intro").style.display = "none";
+    document.getElementById("ar-wrap").style.display = "block";
+    watchForCameraVideo();
+  }
+
+  document.getElementById("start-btn").addEventListener("click", startAR);
+  document.getElementById("retry-cam").addEventListener("click", () => location.reload());
+
+  document.getElementById("close-ar").addEventListener("click", () => {
+    document.getElementById("ar-wrap").style.display = "none";
+    document.getElementById("intro").style.display = "flex";
+    document.querySelectorAll(".card.visible").forEach(c => c.classList.remove("visible"));
+  });
+</script>
+</body>
+</html>
