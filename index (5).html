@@ -1,0 +1,767 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>PortaNar — Portavasos con identidad nariñense</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700;12..96,800&family=Karla:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+
+<style>
+  :root{
+    --ink:#1c140d;
+    --ink-soft:#7c6247;
+    --paper:#f2e4c8;
+    --paper-soft:#e8d5ac;
+    --ground:#140d07;
+    --gold:#c9911f;
+    --gold-soft:#e3b256;
+    --line: rgba(28,20,13,0.14);
+    --line-light: rgba(242,228,200,0.18);
+
+    --c0:#a83a1c; /* Galeras */
+    --c1:#1f8a93; /* Laguna de la Cocha */
+    --c2:#d19b1f; /* Carnaval de Negros y Blancos */
+    --c3:#8a6339; /* Sombrero de Paja Toquilla */
+    --c4:#b23a70; /* Orquídeas nariñenses */
+    --c5:#c1631f; /* El Cuy */
+  }
+
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body{ margin:0; padding:0; height:100%; overflow:hidden; background:var(--ground); font-family:'Karla', sans-serif; color:var(--ink); }
+  h1,h2,h3,.display{ font-family:'Bricolage Grotesque', sans-serif; letter-spacing:-0.01em; }
+  p{ margin:0; }
+  button{ font-family:inherit; }
+
+  #app{ position:fixed; inset:0 0 64px 0; }
+  .view{
+    position:absolute; inset:0; overflow-y:auto; -webkit-overflow-scrolling:touch;
+    background:var(--paper); color:var(--ink);
+    opacity:0; pointer-events:none; transform: translateY(6px);
+    transition: opacity .28s ease, transform .28s ease;
+  }
+  .view.active{ opacity:1; pointer-events:auto; transform:none; }
+
+  /* ---------- Tabbar ---------- */
+  #tabbar{
+    position:fixed; left:0; right:0; bottom:0; z-index:60; height:64px;
+    display:flex; background:var(--ink); border-top:1px solid rgba(242,228,200,0.1);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  #tabbar button{
+    flex:1; border:none; background:none; cursor:pointer;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px;
+    color:#a9906f; font-size:11px; font-weight:600;
+  }
+  #tabbar button svg{ width:20px; height:20px; stroke:#a9906f; fill:none; stroke-width:1.6; }
+  #tabbar button.active{ color:var(--gold-soft); }
+  #tabbar button.active svg{ stroke:var(--gold-soft); }
+  #tabbar button.cam{ color:var(--paper); }
+  #tabbar button.cam svg{ stroke:var(--paper); }
+  #tabbar button.cam .dot{
+    width:5px; height:5px; border-radius:50%; background:var(--gold-soft); position:absolute;
+    margin-top:-22px; margin-left:14px;
+  }
+
+  /* ---------- Bloques compartidos ---------- */
+  .pad{ padding: max(20px, env(safe-area-inset-top)) 22px 40px; }
+  .eyebrow{ font-size:13px; color:var(--gold); font-weight:600; margin-bottom:10px; }
+  .rule{ height:1px; background:var(--line); margin:26px 0; }
+  .lede{ font-size:15px; line-height:1.6; color:#4d3c2a; max-width:38ch; }
+
+  /* ---------- Inicio ---------- */
+  #view-inicio .hero{
+    background: linear-gradient(175deg, #241a10 0%, #140d07 68%);
+    color:var(--paper); padding: max(28px, env(safe-area-inset-top)) 22px 34px;
+    position:relative; overflow:hidden;
+  }
+  #view-inicio .rings{ position:absolute; top:-60px; right:-70px; width:220px; height:220px; }
+  #view-inicio .rings svg{ width:100%; height:100%; }
+  #view-inicio .brand{ font-size:13px; letter-spacing:0.02em; color:#cdb287; margin-bottom:16px; }
+  #view-inicio h1{ font-size: clamp(34px, 9vw, 46px); font-weight:700; line-height:1.05; margin:0 0 16px; max-width:12ch; }
+  #view-inicio .hero p{ font-size:15px; line-height:1.6; color:#dccbaa; max-width:34ch; margin-bottom:26px; }
+  .btn-primary{
+    border:none; cursor:pointer; background:var(--gold); color:#1c140d;
+    font-weight:700; font-size:15px; padding:15px 22px; border-radius:100px;
+    display:inline-flex; align-items:center; gap:9px;
+  }
+  .btn-primary svg{ width:18px; height:18px; }
+  .btn-ghost{
+    border:1px solid rgba(242,228,200,0.35); background:none; color:var(--paper);
+    font-weight:600; font-size:14px; padding:14px 20px; border-radius:100px; cursor:pointer;
+    margin-left:10px;
+  }
+  .chip-row{ display:flex; gap:8px; margin-top:26px; flex-wrap:wrap; }
+  .chip-row .dotc{ width:11px; height:11px; border-radius:50%; }
+
+  .home-section{ padding:30px 22px; }
+  .home-section h2{ font-size:22px; margin:0 0 6px; }
+  .stat-strip{ display:flex; gap:10px; margin-top:20px; }
+  .stat-strip .s{ flex:1; background:var(--paper-soft); border-radius:14px; padding:14px 12px; }
+  .stat-strip .s .n{ font-family:'Bricolage Grotesque', sans-serif; font-weight:700; font-size:19px; }
+  .stat-strip .s .l{ font-size:11.5px; color:var(--ink-soft); margin-top:2px; }
+
+  .mini-grid{ display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:18px; }
+  .mini-card{
+    border-radius:14px; padding:14px; background:var(--ink); color:var(--paper);
+    cursor:pointer; border:none; text-align:left;
+  }
+  .mini-card .sw{ width:24px; height:24px; border-radius:50%; margin-bottom:24px; }
+  .mini-card .t{ font-weight:700; font-size:14px; line-height:1.25; }
+  .mini-card .st{ font-size:11.5px; color:#b39a76; margin-top:3px; }
+
+  /* ---------- Historia ---------- */
+  .story-block{ margin-bottom:22px; }
+  .story-block h3{ font-size:17px; margin:0 0 8px; }
+  .story-block p{ font-size:14.5px; line-height:1.65; color:#3d2f21; }
+
+  .econ-row{ display:flex; flex-direction:column; gap:10px; margin-top:6px; }
+  .econ-card{ border-radius:14px; padding:16px; border:1px solid var(--line); }
+  .econ-card .tag{ font-size:12px; font-weight:700; margin-bottom:6px; }
+  .econ-card p{ font-size:13.5px; line-height:1.55; color:#4d3c2a; }
+  .econ-card.circular{ background: color-mix(in srgb, var(--c5) 10%, var(--paper)); }
+  .econ-card.circular .tag{ color: color-mix(in srgb, var(--c5) 70%, #1c140d); }
+  .econ-card.naranja{ background: color-mix(in srgb, var(--c2) 12%, var(--paper)); }
+  .econ-card.naranja .tag{ color: color-mix(in srgb, var(--c2) 70%, #1c140d); }
+  .econ-card.creativa{ background: color-mix(in srgb, var(--c1) 10%, var(--paper)); }
+  .econ-card.creativa .tag{ color: color-mix(in srgb, var(--c1) 70%, #1c140d); }
+
+  .timeline{ margin-top:8px; border-left:2px solid var(--line); padding-left:16px; display:flex; flex-direction:column; gap:16px; }
+  .timeline .day .d{ font-size:12px; color:var(--gold); font-weight:700; margin-bottom:3px; }
+  .timeline .day .t{ font-size:14px; font-weight:600; }
+
+  /* ---------- Tipos ---------- */
+  .tipos-grid{ display:flex; flex-direction:column; gap:12px; margin-top:16px; }
+  .tipo-row{
+    display:flex; align-items:center; gap:14px; padding:14px; border-radius:16px;
+    border:1px solid var(--line); background:#fffaf0; cursor:pointer; text-align:left; width:100%;
+  }
+  .tipo-row .ring{
+    width:52px; height:52px; border-radius:50%; flex:none;
+    display:flex; align-items:center; justify-content:center;
+    border:2px solid var(--accent);
+  }
+  .tipo-row .ring .core{ width:22px; height:22px; border-radius:50%; background:var(--accent); }
+  .tipo-row .info h3{ font-size:15.5px; margin:0 0 2px; }
+  .tipo-row .info .loc{ font-size:12.5px; color:var(--ink-soft); }
+  .tipo-row .info .msg{ font-size:12px; color:var(--ink-soft); margin-top:4px; font-style:italic; }
+  .tipo-row .weight{ margin-left:auto; text-align:right; font-size:12px; color:var(--ink-soft); flex:none; }
+  .tipo-row .weight b{ display:block; font-family:'Bricolage Grotesque',sans-serif; font-size:16px; color:var(--ink); }
+
+  /* ---------- Impacto ---------- */
+  .impact-grid{ display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:16px; }
+  .impact-card{ border-radius:14px; padding:16px 14px; background:var(--ink); color:var(--paper); }
+  .impact-card .n{ font-family:'Bricolage Grotesque', sans-serif; font-weight:700; font-size:22px; color:var(--gold-soft); }
+  .impact-card .l{ font-size:12px; color:#cbb98f; margin-top:4px; line-height:1.4; }
+
+  .dye-list{ display:flex; flex-wrap:wrap; gap:8px; margin-top:14px; }
+  .dye-pill{ font-size:12.5px; padding:8px 12px; border-radius:100px; background:var(--paper-soft); color:#4d3c2a; }
+
+  /* ---------- Sheet (ficha compartida) ---------- */
+  #sheet-backdrop{
+    position:fixed; inset:0; z-index:70; background:rgba(20,13,7,0.55);
+    opacity:0; pointer-events:none; transition:opacity .3s ease;
+  }
+  #sheet-backdrop.visible{ opacity:1; pointer-events:auto; }
+
+  .sheet{
+    position:fixed; left:0; right:0; bottom:0; z-index:80;
+    max-height:82vh; overflow-y:auto;
+    background:var(--paper); color:var(--ink);
+    border-radius:22px 22px 0 0;
+    padding: 20px 22px max(28px, env(safe-area-inset-bottom));
+    transform: translateY(100%);
+    transition: transform .38s cubic-bezier(.2,.8,.2,1);
+    box-shadow: 0 -14px 44px rgba(0,0,0,0.35);
+  }
+  .sheet.visible{ transform: translateY(0); }
+  .sheet .grip{ width:36px; height:4px; border-radius:2px; background:var(--line); margin:0 auto 18px; }
+  .sheet .head{ display:flex; align-items:center; gap:13px; margin-bottom:2px; }
+  .sheet .head .ring{ width:46px; height:46px; border-radius:50%; flex:none; display:flex; align-items:center; justify-content:center; border:2px solid var(--accent); }
+  .sheet .head .ring .core{ width:20px; height:20px; border-radius:50%; background:var(--accent); }
+  .sheet h2{ font-size:22px; margin:0 0 2px; line-height:1.1; }
+  .sheet .loc{ font-size:12.5px; color:var(--ink-soft); }
+  .sheet .msg{ font-size:13px; color:var(--accent); font-style:italic; margin-top:14px; }
+
+  .sheet .block{ margin:18px 0; }
+  .sheet .label{ font-size:12px; color:var(--ink-soft); margin-bottom:6px; font-weight:600; }
+  .sheet .body-text{ font-size:14px; line-height:1.62; color:#3d2f21; }
+
+  .sheet .stats{ display:flex; gap:8px; margin:18px 0; }
+  .sheet .stat{ flex:1; background:rgba(28,20,13,0.05); border-radius:10px; padding:11px 8px; text-align:center; }
+  .sheet .stat .num{ font-family:'Bricolage Grotesque', sans-serif; font-size:15px; font-weight:700; }
+  .sheet .stat .lbl{ font-size:10.5px; color:var(--ink-soft); margin-top:2px; }
+
+  .sheet .fate{
+    border-radius:12px; padding:14px 15px; margin-top:4px;
+    background: color-mix(in srgb, var(--accent) 12%, var(--paper));
+    border:1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  }
+  .sheet .fate .label{ color: color-mix(in srgb, var(--accent) 65%, #1c140d); }
+  .sheet .close-sheet{
+    position:absolute; top:16px; right:16px; width:32px; height:32px; border-radius:50%;
+    border:none; background:rgba(28,20,13,0.08); color:var(--ink); font-size:16px; cursor:pointer;
+  }
+
+  /* ---------- Vista AR ---------- */
+  #ar-wrap{ position:fixed; inset:0; display:none; background:#000; z-index:90; }
+  a-scene{ position:absolute; inset:0; }
+
+  video{
+    position:fixed !important; top:0 !important; left:0 !important;
+    width:100% !important; height:100% !important;
+    object-fit:cover !important; z-index:1 !important; display:block !important;
+    visibility:visible !important; opacity:1 !important;
+  }
+  #ar-wrap canvas.a-canvas{
+    position:fixed !important; top:0 !important; left:0 !important;
+    width:100% !important; height:100% !important;
+    z-index:2 !important; background:transparent !important;
+  }
+
+  #hud{
+    position:absolute; top:0; left:0; right:0; z-index:20;
+    padding: max(18px, env(safe-area-inset-top)) 20px 16px;
+    background: linear-gradient(180deg, rgba(20,13,7,0.72), rgba(20,13,7,0));
+    pointer-events:none;
+  }
+  #hud .instruction{ color:#f6ecda; font-size:14px; font-weight:600; display:flex; align-items:center; gap:9px; }
+  #hud .pulse{ width:8px; height:8px; border-radius:50%; background:var(--gold-soft); animation: pulse 1.6s ease-in-out infinite; }
+  @keyframes pulse{ 0%,100%{ opacity:.4; transform:scale(0.8);} 50%{ opacity:1; transform:scale(1);} }
+
+  #dots{ display:flex; gap:7px; margin-top:12px; }
+  #dots .d{ width:9px; height:9px; border-radius:50%; border:1.4px solid rgba(246,236,218,0.55); transition: background .35s ease, border-color .35s ease, transform .35s ease; }
+  #dots .d.seen{ transform:scale(1.15); }
+
+  #close-ar{
+    position:absolute; z-index:95; top: max(16px, env(safe-area-inset-top));
+    right:18px; width:36px; height:36px; border-radius:50%;
+    background:rgba(20,13,7,0.55); border:1px solid rgba(246,236,218,0.3);
+    color:#f6ecda; font-size:18px; line-height:1; display:flex; align-items:center; justify-content:center;
+    cursor:pointer;
+  }
+
+  #cam-loading{
+    position:absolute; left:50%; top: max(70px, calc(env(safe-area-inset-top) + 60px));
+    transform: translateX(-50%);
+    z-index:15; max-width: min(86vw, 360px);
+    display:flex; align-items:center; gap:10px;
+    padding:11px 16px; border-radius:999px;
+    background: rgba(20,13,7,0.72); backdrop-filter: blur(6px);
+    color:#efdfc0; pointer-events:none;
+    transition: opacity .4s ease;
+  }
+  #cam-loading .spinner{ width:15px; height:15px; flex:none; border-radius:50%; border:2px solid rgba(239,223,192,0.25); border-top-color:var(--gold-soft); animation: spin 0.9s linear infinite; }
+  @keyframes spin{ to{ transform: rotate(360deg); } }
+  #cam-loading p{ font-size:12.5px; color:#efdfc0; line-height:1.4; margin:0; }
+  #cam-loading.hidden{ opacity:0; }
+  #cam-loading .retry{ display:none; pointer-events:auto; margin-left:4px; flex:none; border:1px solid rgba(239,223,192,0.4); background:transparent; color:#efdfc0; font-family:'Karla',sans-serif; font-size:12px; padding:6px 12px; border-radius:999px; cursor:pointer; }
+  #cam-loading.error{ pointer-events:auto; background:rgba(70,20,14,0.85); }
+  #cam-loading.error .spinner{ display:none; }
+  #cam-loading.error .retry{ display:inline-block; }
+
+  #ar-sheets .sheet{ z-index:96; }
+</style>
+</head>
+<body>
+
+<div id="app">
+
+  <!-- ============ INICIO ============ -->
+  <section id="view-inicio" class="view active">
+    <div class="hero">
+      <div class="rings">
+        <svg viewBox="0 0 220 220"><circle cx="110" cy="110" r="95" fill="none" stroke="rgba(242,228,200,0.18)"/><circle cx="110" cy="110" r="62" fill="none" stroke="rgba(242,228,200,0.14)"/></svg>
+      </div>
+      <div class="brand">PortaNar · colección de 6 piezas</div>
+      <h1>Nariño cabe<br>en un portavasos.</h1>
+      <p>Portavasos de cartón reciclado y colorantes naturales que cuentan, uno por uno, una historia de nuestra tierra: un volcán, una laguna, un carnaval, un tejido, una flor y un plato ancestral.</p>
+      <div>
+        <button class="btn-primary" id="go-ar">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2Z"/><circle cx="12" cy="13" r="4"/></svg>
+          Escanear un portavasos
+        </button>
+        <button class="btn-ghost" data-goto="tipos">Ver la colección</button>
+      </div>
+      <div class="chip-row" id="chip-row"></div>
+    </div>
+
+    <div class="home-section">
+      <div class="eyebrow">De la caja a la mesa</div>
+      <h2>Cartón que iba a la basura, hoy es identidad.</h2>
+      <p class="lede">Aprovechamos cartón de desecho y colorantes vegetales para crear objetos útiles, 100% biodegradables, que llevan el color y la memoria de Nariño a cualquier mesa.</p>
+      <div class="stat-strip">
+        <div class="s"><div class="n">20 g</div><div class="l">peso por pieza</div></div>
+        <div class="s"><div class="n">6</div><div class="l">diseños distintos</div></div>
+        <div class="s"><div class="n">4–8 sem.</div><div class="l">para compostarse</div></div>
+      </div>
+      <div class="mini-grid" id="mini-grid"></div>
+    </div>
+  </section>
+
+  <!-- ============ HISTORIA ============ -->
+  <section id="view-historia" class="view">
+    <div class="pad">
+      <div class="eyebrow">Historia</div>
+      <h2 style="font-size:26px;margin:0 0 18px;">De un problema de cartón a un proyecto de identidad</h2>
+
+      <div class="story-block">
+        <h3>El problema</h3>
+        <p>En Colombia se desechan millones de toneladas de cartón cada año, y buena parte termina en los mismos basureros que rodean el Galeras, la Cocha y nuestros páramos. Ese cartón —cajas de cereales, empaques de envíos, cartón ondulado— casi siempre puede tener una segunda vida.</p>
+      </div>
+      <div class="story-block">
+        <h3>La solución</h3>
+        <p>PortaNar transforma ese cartón en portavasos funcionales y decorativos, teñidos con colorantes 100% naturales (cúrcuma, col morada, café, ají, espinaca, cebolla) y decorados a mano con motivos que representan un lugar, una planta o una tradición de Nariño. Nada de tintas industriales ni plásticos: al final de su vida útil, cada pieza vuelve a la tierra.</p>
+      </div>
+
+      <div class="rule"></div>
+
+      <div class="eyebrow">Tres economías, una pieza</div>
+      <div class="econ-row">
+        <div class="econ-card circular">
+          <div class="tag">Economía circular</div>
+          <p>El cartón que iría al relleno sanitario se convierte en producto; al terminar su vida útil, se composta y nutre el suelo en vez de acumularse como residuo.</p>
+        </div>
+        <div class="econ-card naranja">
+          <div class="tag">Economía naranja</div>
+          <p>Cada diseño rescata un símbolo cultural nariñense —un volcán, una laguna, un carnaval, un tejido, una flor, un plato de fiesta— y lo vuelve parte de la vida diaria.</p>
+        </div>
+        <div class="econ-card creativa">
+          <div class="tag">Economía creativa</div>
+          <p>Tinturado natural, estampado a mano y realidad aumentada se combinan para que cada portavasos también sea una forma de contar una historia.</p>
+        </div>
+      </div>
+
+      <div class="rule"></div>
+
+      <div class="eyebrow">Cómo se hace, en 4 días</div>
+      <div class="timeline">
+        <div class="day"><div class="d">Día 1</div><div class="t">Recolección de cartón y preparación de colorantes naturales</div></div>
+        <div class="day"><div class="d">Día 2</div><div class="t">Corte de las piezas y primera capa de color base</div></div>
+        <div class="day"><div class="d">Día 3</div><div class="t">Estampado de los motivos nariñenses y capa protectora</div></div>
+        <div class="day"><div class="d">Día 4</div><div class="t">Pruebas de resistencia, empaque y presentación final</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ TIPOS ============ -->
+  <section id="view-tipos" class="view">
+    <div class="pad">
+      <div class="eyebrow">Tipos</div>
+      <h2 style="font-size:26px;margin:0 0 8px;">La colección — 6 piezas</h2>
+      <p class="lede">Toca cualquier portavasos para conocer su diseño, su colorante y la historia real que representa.</p>
+      <div class="tipos-grid" id="tipos-grid"></div>
+    </div>
+  </section>
+
+  <!-- ============ IMPACTO ============ -->
+  <section id="view-impacto" class="view">
+    <div class="pad">
+      <div class="eyebrow">Impacto</div>
+      <h2 style="font-size:26px;margin:0 0 8px;">Lo que cambia con cada set de 6</h2>
+      <p class="lede">Cifras del set completo, calculadas a partir de los 20 gramos de cada pieza.</p>
+
+      <div class="impact-grid">
+        <div class="impact-card"><div class="n">120 g</div><div class="l">de cartón reciclado por set (6 × 20 g)</div></div>
+        <div class="impact-card"><div class="n">100%</div><div class="l">biodegradable en 4–8 semanas</div></div>
+        <div class="impact-card"><div class="n">0</div><div class="l">tintas sintéticas — solo colorantes vegetales</div></div>
+        <div class="impact-card"><div class="n">80%</div><div class="l">menos huella de carbono frente a un set plástico</div></div>
+      </div>
+
+      <div class="rule"></div>
+      <div class="eyebrow">Colorantes naturales usados</div>
+      <div class="dye-list">
+        <div class="dye-pill">Cúrcuma — amarillo</div>
+        <div class="dye-pill">Col morada — turquesa y rosa</div>
+        <div class="dye-pill">Café usado — grises y marrones</div>
+        <div class="dye-pill">Ají — naranja</div>
+        <div class="dye-pill">Espinaca — verde</div>
+        <div class="dye-pill">Zanahoria — naranja tostado</div>
+        <div class="dye-pill">Cebolla morada — líneas de tejido</div>
+        <div class="dye-pill">Carbón vegetal — negro</div>
+      </div>
+
+      <div class="rule"></div>
+      <div class="story-block">
+        <h3>Al final de su vida útil</h3>
+        <p>Ninguna pieza lleva plástico, cromo ni tintas industriales. Al llegar al final de su vida útil, cada portavasos puede enterrarse en tierra húmeda o llevarse a compost doméstico: en 4 a 8 semanas se descompone por completo y devuelve nutrientes al suelo.</p>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<!-- ============ TABBAR ============ -->
+<nav id="tabbar">
+  <button data-goto="inicio" class="active">
+    <svg viewBox="0 0 24 24"><path d="M3 11l9-7 9 7"/><path d="M5 10v9a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1v-9"/></svg>
+    Inicio
+  </button>
+  <button data-goto="historia">
+    <svg viewBox="0 0 24 24"><path d="M4 4h11a4 4 0 0 1 4 4v12H8a4 4 0 0 1-4-4V4Z"/><path d="M8 9h7M8 13h5"/></svg>
+    Historia
+  </button>
+  <button data-goto="tipos">
+    <svg viewBox="0 0 24 24"><circle cx="8" cy="8" r="3.4"/><circle cx="16" cy="8" r="3.4"/><circle cx="8" cy="16" r="3.4"/><circle cx="16" cy="16" r="3.4"/></svg>
+    Tipos
+  </button>
+  <button data-goto="impacto">
+    <svg viewBox="0 0 24 24"><path d="M4 20V10M11 20V4M18 20v-7"/></svg>
+    Impacto
+  </button>
+  <button id="tab-ar" class="cam" style="position:relative;">
+    <svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2Z"/><circle cx="12" cy="13" r="4"/></svg>
+    Escanear
+    <span class="dot"></span>
+  </button>
+</nav>
+
+<!-- ============ SHEET (ficha compartida, usada por Tipos) ============ -->
+<div id="sheet-backdrop"></div>
+<div class="sheet" id="detail-sheet"></div>
+
+<!-- ============ VISTA AR ============ -->
+<div id="ar-wrap">
+  <button id="close-ar" aria-label="Cerrar">×</button>
+
+  <div id="hud">
+    <div class="instruction"><span class="pulse"></span><span id="instruction-text">Buscando un portavasos…</span></div>
+    <div id="dots"></div>
+  </div>
+
+  <div id="cam-loading">
+    <div class="spinner"></div>
+    <p id="cam-loading-text">Activando cámara…</p>
+    <button class="retry" id="retry-cam">Reintentar</button>
+  </div>
+
+  <a-scene id="ar-scene"
+    embedded
+    vr-mode-ui="enabled: false"
+    renderer="antialias: true; alpha: true"
+    mindar-image="imageTargetSrc: markers/targets.mind; autoStart: false; uiScanning: no; uiLoading: no; filterMinCF: 0.0001; filterBeta: 0.001;">
+
+    <a-assets></a-assets>
+    <a-entity id="markers"></a-entity>
+    <a-camera position="0 0 0" look-controls="enabled: false" cursor="fuse: false" raycaster="near: 10; far: 10000;"></a-camera>
+  </a-scene>
+
+  <div id="ar-sheets"></div>
+</div>
+
+<script>
+  // ---------------------------------------------------------------
+  // Colección PortaNar — 6 piezas con identidad nariñense.
+  // Cada pieza corresponde a un target de imagen reconocido con MindAR
+  // (mind-ar-js), generado a partir de porta1.png ... porta6.png con el
+  // compilador oficial: https://hiukim.github.io/mind-ar-js-doc/tools/compile
+  //
+  // IMPORTANTE: sube las 6 imágenes al compilador EN ESTE ORDEN exacto
+  // (Galeras, Laguna de la Cocha, Carnaval, Sombrero de Paja, Orquídeas,
+  // El Cuy), porque el índice de cada imagen en "targets.mind" (0..5) es
+  // el que se usa abajo como "targetIndex" y debe coincidir con el "id"
+  // de cada pieza. Coloca, junto a este index.html, una carpeta "markers"
+  // con: markers/targets.mind
+  // ---------------------------------------------------------------
+  const PIEZAS = [
+    {
+      id: 0, archivo: "porta1", nombre: "Galeras, guardián de Pasto", lugar: "Volcán Galeras",
+      accent: "var(--c0)",
+      material: "Cartón reciclado teñido con café usado y carbón vegetal",
+      colorBase: "Degradado de blanco natural a gris ceniza, con la silueta del volcán en negro carbón y un borde verde vegetal.",
+      tecnica: "Silueta pintada a pincel sobre un fondo degradado",
+      historia: "Los quillacingas, primeros pobladores de estas montañas, llamaban al volcán \"Urcunina\", montaña de fuego. Cuando llegaron los españoles, la silueta de su cima les recordó a las galeras, los barcos de remos del Mediterráneo, y de ahí nació el nombre que lleva hoy. A solo 9 km de Pasto, el Galeras es el volcán más activo de Colombia y el gran vigía de la ciudad: aparece en leyendas, poemas y en la vida diaria de quienes crecen a sus faldas. Desde 1985 sus laderas altas son Santuario de Flora y Fauna, un territorio que la propia ceniza volcánica ayuda a nutrir.",
+      mensaje: "Galeras — guardián de Pasto",
+      peso: "20 g", diametro: "≈ 9 cm", bio: "4–8 semanas",
+      final: "100% cartón y colorantes vegetales: puede compostarse en casa o enterrarse en tierra húmeda. En 4 a 8 semanas se descompone por completo."
+    },
+    {
+      id: 1, archivo: "porta2", nombre: "Laguna de la Cocha, espejo de los Andes", lugar: "Laguna de la Cocha",
+      accent: "var(--c1)",
+      material: "Cartón reciclado teñido con col morada y café usado",
+      colorBase: "Turquesa degradado con ondas de agua en el centro y un borde de montañas grises.",
+      tecnica: "Ondas talladas a pincel fino sobre la base turquesa",
+      historia: "También llamada Lago Guamués, es el segundo espejo de agua natural más grande de Colombia. En su centro flota la Isla La Corota, la reserva natural más pequeña del sistema de parques nacionales del país y territorio sagrado para los pueblos quillacinga y kofán. La leyenda cuenta que una princesa derramó una totuma de agua como castigo de los dioses: la totuma vacía se convirtió en la isla, y el agua derramada dio origen a la laguna que hoy protege orquídeas silvestres, patos zambullidores y las neblinas que suben desde el páramo.",
+      mensaje: "Laguna de la Cocha — espejo de los Andes",
+      peso: "20 g", diametro: "≈ 9 cm", bio: "4–8 semanas",
+      final: "100% cartón y colorantes vegetales: puede compostarse en casa o enterrarse en tierra húmeda. En 4 a 8 semanas se descompone por completo."
+    },
+    {
+      id: 2, archivo: "porta3", nombre: "Carnaval de Negros y Blancos, patrimonio vivo", lugar: "Carnaval de Negros y Blancos",
+      accent: "var(--c2)",
+      material: "Cartón reciclado teñido con cúrcuma, ají y col morada",
+      colorBase: "Amarillo vibrante estampado con patrones geométricos multicolor.",
+      tecnica: "Estampado a mano con sellos de vegetales",
+      historia: "Del 28 de diciembre al 7 de enero, Pasto se convierte en un solo taller colectivo. El Carnaval nació de los rituales agrarios de los pueblos pasto y quillacinga al sol, a la luna y a la Madre Tierra, y se transformó el 5 de enero de 1607, cuando la población esclavizada obtuvo un día libre y pintó su rostro de blanco como gesto de igualdad. De ahí nacieron el Día de Negros y el Día de Blancos, que hoy conviven con el Desfile Magno de carrozas monumentales. Desde 2009 la UNESCO lo reconoce como Patrimonio Cultural Inmaterial de la Humanidad.",
+      mensaje: "Carnaval de Negros y Blancos — patrimonio cultural",
+      peso: "20 g", diametro: "≈ 9 cm", bio: "4–8 semanas",
+      final: "100% cartón y colorantes vegetales: puede compostarse en casa o enterrarse en tierra húmeda. En 4 a 8 semanas se descompone por completo."
+    },
+    {
+      id: 3, archivo: "porta4", nombre: "Sombrero de Paja, tradición de Sandoná", lugar: "Sombrero de Paja Toquilla",
+      accent: "var(--c3)",
+      material: "Cartón reciclado sin teñir, con detalles de cebolla morada",
+      colorBase: "Beige natural del cartón con líneas entrecruzadas en marrón, imitando un tejido.",
+      tecnica: "Patrón de tejido dibujado a mano",
+      historia: "En Sandoná, al occidente de Nariño, generaciones enteras tejen sombreros con iraca (Carludovica palmata), una fibra vegetal también llamada paja toquilla. La técnica llegó desde Ecuador hacia 1847 de la mano de Juan Vivanco y se extendió por el occidente nariñense hasta convertirse en el sustento de miles de familias. A comienzos del siglo XX, el padre José María Ordóñez impulsó que también las mujeres tejieran, un oficio que antes era solo de hombres. Cada sombrero puede tardar días en tejerse, hebra a hebra.",
+      mensaje: "Sombrero de Paja — tradición artesanal",
+      peso: "20 g", diametro: "≈ 9 cm", bio: "4–8 semanas",
+      final: "100% cartón y colorantes vegetales: puede compostarse en casa o enterrarse en tierra húmeda. En 4 a 8 semanas se descompone por completo."
+    },
+    {
+      id: 4, archivo: "porta5", nombre: "Orquídeas nariñenses, belleza silvestre", lugar: "Orquídeas de Nariño",
+      accent: "var(--c4)",
+      material: "Cartón reciclado teñido con col morada diluida",
+      colorBase: "Rosa suave con la silueta de una orquídea en morado concentrado y un borde verde.",
+      tecnica: "Silueta floral pintada a pincel",
+      historia: "Colombia alberga más especies de orquídeas que cualquier otro país del mundo, y Nariño guarda una parte generosa de esa riqueza en sus bosques de niebla. La Sobralia gloriosa, una orquídea silvestre de flores grandes y efímeras, fue elegida por votación popular como una de las plantas emblema del departamento. Crece escondida entre el musgo y la neblina, y su presencia es señal de un bosque sano.",
+      mensaje: "Orquídeas nariñenses — belleza natural",
+      peso: "20 g", diametro: "≈ 9 cm", bio: "4–8 semanas",
+      final: "100% cartón y colorantes vegetales: puede compostarse en casa o enterrarse en tierra húmeda. En 4 a 8 semanas se descompone por completo."
+    },
+    {
+      id: 5, archivo: "porta6", nombre: "El Cuy, sabor de fiesta", lugar: "El Cuy",
+      accent: "var(--c5)",
+      material: "Cartón reciclado teñido con zanahoria y café usado",
+      colorBase: "Naranja tostado con la silueta de un cuy asado en el centro y un borde marrón, como el dorado de la parrilla.",
+      tecnica: "Silueta pintada a pincel imitando el tueste de la brasa",
+      historia: "Los quillacingas, pastos y abades incluyeron al cuy en su alimentación desde tiempos inmemoriales, en el extremo sur del antiguo Tahuantinsuyo, el imperio inca. Cuando llegaron los españoles, que nunca habían visto el animal, lo llamaron \"conejillo de Indias\" y se lo llevaron a Europa como mascota; pero en Nariño su carne nunca dejó de ser un manjar. Hoy el cuy asado, preparado entre brasas tras un cuidadoso proceso de cría, es el plato con el que los pastusos agasajan a sus invitados en cumpleaños, grados y matrimonios: un gesto de cariño que se sirve entero, con papas y ají de maní.",
+      mensaje: "El Cuy — sabor y tradición andina",
+      peso: "20 g", diametro: "≈ 9 cm", bio: "4–8 semanas",
+      final: "100% cartón y colorantes vegetales: puede compostarse en casa o enterrarse en tierra húmeda. En 4 a 8 semanas se descompone por completo."
+    }
+  ];
+
+  // ---------------------------------------------------------------
+  // Navegación entre módulos (Inicio / Historia / Tipos / Impacto)
+  // ---------------------------------------------------------------
+  const views = document.querySelectorAll(".view");
+  const tabButtons = document.querySelectorAll("#tabbar button[data-goto]");
+
+  function goto(name){
+    views.forEach(v => v.classList.toggle("active", v.id === "view-" + name));
+    tabButtons.forEach(b => b.classList.toggle("active", b.dataset.goto === name));
+    document.getElementById("app").scrollTop = 0;
+    const active = document.getElementById("view-" + name);
+    if(active) active.scrollTop = 0;
+  }
+  document.querySelectorAll("[data-goto]").forEach(el => {
+    el.addEventListener("click", () => goto(el.dataset.goto));
+  });
+
+  // ---------------------------------------------------------------
+  // Construcción de bloques dinámicos: chips del hero, mini-grid,
+  // grilla de Tipos.
+  // ---------------------------------------------------------------
+  const chipRow = document.getElementById("chip-row");
+  const miniGrid = document.getElementById("mini-grid");
+  const tiposGrid = document.getElementById("tipos-grid");
+
+  PIEZAS.forEach(p => {
+    const chip = document.createElement("div");
+    chip.className = "dotc";
+    chip.style.background = p.accent;
+    chipRow.appendChild(chip);
+
+    const mini = document.createElement("button");
+    mini.className = "mini-card";
+    mini.innerHTML = `<div class="sw" style="background:${p.accent}"></div><div class="t">${p.lugar}</div><div class="st">${p.peso}</div>`;
+    mini.addEventListener("click", () => openSheet(p, document.getElementById("detail-sheet"), document.getElementById("sheet-backdrop")));
+    miniGrid.appendChild(mini);
+
+    const row = document.createElement("button");
+    row.className = "tipo-row";
+    row.style.setProperty("--accent", p.accent);
+    row.innerHTML = `
+      <div class="ring"><div class="core"></div></div>
+      <div class="info">
+        <h3>${p.nombre}</h3>
+        <div class="loc">${p.lugar}</div>
+        <div class="msg">${p.mensaje}</div>
+      </div>
+      <div class="weight"><b>${p.peso}</b>${p.diametro}</div>
+    `;
+    row.addEventListener("click", () => openSheet(p, document.getElementById("detail-sheet"), document.getElementById("sheet-backdrop")));
+    tiposGrid.appendChild(row);
+  });
+
+  // ---------------------------------------------------------------
+  // Ficha de detalle (bottom sheet) — reutilizada por Tipos y por AR
+  // ---------------------------------------------------------------
+  function sheetHTML(p, withClose){
+    return `
+      ${withClose ? '<button class="close-sheet" data-close>×</button>' : ''}
+      <div class="grip"></div>
+      <div class="head">
+        <div class="ring" style="--accent:${p.accent}"><div class="core" style="background:${p.accent}"></div></div>
+        <div>
+          <h2>${p.nombre}</h2>
+          <div class="loc">${p.material}</div>
+        </div>
+      </div>
+      <div class="msg" style="color:${p.accent}">${p.mensaje}</div>
+      <div class="rule"></div>
+      <div class="block">
+        <div class="label">Historia</div>
+        <div class="body-text">${p.historia}</div>
+      </div>
+      <div class="block">
+        <div class="label">Color y técnica</div>
+        <div class="body-text">${p.colorBase} ${p.tecnica}.</div>
+      </div>
+      <div class="stats">
+        <div class="stat"><div class="num">${p.peso}</div><div class="lbl">Peso</div></div>
+        <div class="stat"><div class="num">${p.diametro}</div><div class="lbl">Diámetro</div></div>
+        <div class="stat"><div class="num">${p.bio}</div><div class="lbl">Biodegradable</div></div>
+      </div>
+      <div class="fate">
+        <div class="label">Al final de su vida útil</div>
+        <div class="body-text">${p.final}</div>
+      </div>
+    `;
+  }
+
+  function openSheet(p, sheetEl, backdropEl){
+    sheetEl.style.setProperty("--accent", p.accent);
+    sheetEl.innerHTML = sheetHTML(p, true);
+    sheetEl.classList.add("visible");
+    backdropEl.classList.add("visible");
+    sheetEl.querySelector("[data-close]").addEventListener("click", () => closeSheet(sheetEl, backdropEl));
+  }
+  function closeSheet(sheetEl, backdropEl){
+    sheetEl.classList.remove("visible");
+    backdropEl.classList.remove("visible");
+  }
+  document.getElementById("sheet-backdrop").addEventListener("click", () =>
+    closeSheet(document.getElementById("detail-sheet"), document.getElementById("sheet-backdrop"))
+  );
+
+  // ---------------------------------------------------------------
+  // Módulo de Realidad Aumentada (MindAR)
+  // ---------------------------------------------------------------
+  const markersRoot = document.getElementById("markers");
+  const arSheetsRoot = document.getElementById("ar-sheets");
+  const dotsRoot = document.getElementById("dots");
+  const instructionText = document.getElementById("instruction-text");
+
+  PIEZAS.forEach(p => {
+    const marker = document.createElement("a-entity");
+    marker.setAttribute("mindar-image-target", "targetIndex: " + p.id);
+    marker.setAttribute("id", "marker-" + p.id);
+    marker.innerHTML = `
+      <a-torus color="${p.accent}" radius="0.5" radius-tubular="0.02" position="0 0 0" rotation="0 0 0"
+        animation="property: scale; dir: alternate; dur: 900; loop: true; to: 1.06 1.06 1.06"></a-torus>
+      <a-circle color="${p.accent}" opacity="0.18" radius="0.46" position="0 0 -0.005"></a-circle>
+    `;
+    markersRoot.appendChild(marker);
+
+    marker.addEventListener("targetFound", () => showArCard(p.id));
+    marker.addEventListener("targetLost", () => hideArCard(p.id));
+
+    const sheet = document.createElement("div");
+    sheet.className = "sheet";
+    sheet.id = "ar-card-" + p.id;
+    sheet.style.setProperty("--accent", p.accent);
+    sheet.innerHTML = sheetHTML(p, false);
+    arSheetsRoot.appendChild(sheet);
+
+    const dot = document.createElement("div");
+    dot.className = "d";
+    dot.id = "dot-" + p.id;
+    dotsRoot.appendChild(dot);
+  });
+
+  const found = new Set();
+
+  function showArCard(id){
+    document.querySelectorAll("#ar-sheets .sheet.visible").forEach(c => c.classList.remove("visible"));
+    document.getElementById("ar-card-" + id).classList.add("visible");
+    document.getElementById("hud").style.opacity = "0.55";
+    if(!found.has(id)){
+      found.add(id);
+      document.getElementById("dot-" + id).classList.add("seen");
+      document.getElementById("dot-" + id).style.background = PIEZAS[id].accent;
+      document.getElementById("dot-" + id).style.borderColor = PIEZAS[id].accent;
+    }
+    instructionText.textContent = PIEZAS[id].lugar;
+    updateProgressText();
+  }
+  function hideArCard(id){
+    document.getElementById("ar-card-" + id).classList.remove("visible");
+    document.getElementById("hud").style.opacity = "1";
+    updateProgressText();
+  }
+  function updateProgressText(){
+    if(found.size === 0){
+      instructionText.textContent = "Buscando un portavasos…";
+    } else if(found.size === PIEZAS.length){
+      instructionText.textContent = "Colección completa — " + found.size + "/6 piezas descubiertas";
+    } else {
+      instructionText.textContent = found.size + "/6 piezas descubiertas";
+    }
+  }
+
+  // ---------------------------------------------------------------
+  // Arranque de la cámara: se activa solo al pulsar "Escanear" y se
+  // mantiene un estado de carga hasta que el video esté en pantalla.
+  // ---------------------------------------------------------------
+  const loading = document.getElementById("cam-loading");
+  const loadingText = document.getElementById("cam-loading-text");
+  let cameraWatchdog = null;
+
+  function watchForCameraVideo(){
+    let settled = false;
+    const trySettle = () => {
+      const video = document.querySelector("video");
+      if(video && video.readyState >= 2 && !settled){
+        settled = true;
+        clearInterval(poller);
+        clearTimeout(cameraWatchdog);
+        loading.classList.add("hidden");
+      }
+    };
+    const poller = setInterval(trySettle, 250);
+    trySettle();
+    cameraWatchdog = setTimeout(() => {
+      if(settled) return;
+      clearInterval(poller);
+      loading.classList.add("error");
+      loadingText.textContent = "No se pudo mostrar la cámara. Revisa el permiso del sitio y que se sirva por HTTPS.";
+    }, 7000);
+  }
+
+  const arScene = document.getElementById("ar-scene");
+
+  function startAR(){
+    loading.classList.remove("hidden", "error");
+    loadingText.textContent = "Activando cámara…";
+    document.getElementById("ar-wrap").style.display = "block";
+    watchForCameraVideo();
+
+    const arrancar = () => {
+      const sistema = arScene.systems["mindar-image-system"];
+      if(sistema){ sistema.start(); }
+      else { arScene.addEventListener("renderstart", () => arScene.systems["mindar-image-system"].start(), { once:true }); }
+    };
+    if(arScene.hasLoaded) arrancar();
+    else arScene.addEventListener("loaded", arrancar, { once:true });
+  }
+
+  document.getElementById("go-ar").addEventListener("click", startAR);
+  document.getElementById("tab-ar").addEventListener("click", startAR);
+  document.getElementById("retry-cam").addEventListener("click", () => location.reload());
+
+  document.getElementById("close-ar").addEventListener("click", () => {
+    const sistema = arScene.systems["mindar-image-system"];
+    if(sistema) sistema.stop();
+    document.getElementById("ar-wrap").style.display = "none";
+    document.querySelectorAll("#ar-sheets .sheet.visible").forEach(c => c.classList.remove("visible"));
+  });
+</script>
+</body>
+</html>
